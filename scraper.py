@@ -11,61 +11,112 @@ import pdb
 #[_] Location
 #[_] Job Summary
 
-def main():
-	URL = 'https://ca.indeed.com/jobs?q=data%20scientist&l=toronto'
-	#conducting a request of the stated URL above:
-	page = requests.get(URL)
-	#specifying a desired format of “page” using the html parser - this allows python to read the various components of the page, rather than treating it as one long string.
-	soup = BeautifulSoup(page.text, 'html.parser')
-	#printing soup in a more structured tree format that makes for easier reading
-	# print(soup.prettify())
+job_titles = []
+company_names = []
+locations = []
+job_summaries = []
 
+def getJobTitles(soup):
 	#Each job posting is nested inside of a <div> with class="row result"
 	#Trying to pull job titles:
 	#1. Pull out <div class="row result">
 	#2. Pull out <div class="title">
 	#3. Pull out <a title=(title)>
-
-	job_titles = []
+	global job_titles
 	for outter_div in soup.find_all(name='div', attrs={"class":["row", "result"]}):
 		for inner_div in outter_div.find_all(name='div', attrs={"class": "title"}):
 			for a in inner_div.find_all(name="a", attrs={"class":"jobtitle"}):
 				job_titles.append(a.get_text().strip())
 
+def getCompanyNames(soup):
 	#Getting company name:
 	#1. Pull out <div class="row result">
 	#2. Pull out <div class="sjcl">
 	#3. Pull out <span class="company">
-	company_names = []
+	global company_names
 	for outter_div in soup.find_all(name='div', attrs={"class":["row",'result']}):
 		for inner_div in outter_div.find_all(name="div", attrs={"class":"sjcl"}):
 			company_name = inner_div.find(name="span", attrs={"class":"company"}).get_text().strip()
 			company_names.append(company_name)
 
+def getLocations(soup):
 	#Getting locations:
 	#1. Pull out <div class="row result">
 	#2. Pull out <div class="sjcl">
 	#3. Pull out <div class="location">
-	locations = []
+	global locations
 	for outter_div in soup.find_all(name='div', attrs={"class":["row","result"]}):
 		for inner_div in outter_div.find_all(name="div",attrs={"class":"sjcl"}):
-			# pdb.set_trace()
-			print(inner_div.get_text)
 			location = inner_div.find(name="div",attrs={"class":"location"})
 			if location:
 				locations.append(location.get_text().strip())
 			else:
 				location = inner_div.find(name="div",attrs={"data-rc-loc":True}).next_sibling.next_sibling.text
-				# pdb.set_trace()
 				locations.append(location.strip())
 
-	print(len(job_titles), len(company_names))
 
-	for i in range(len(job_titles)):
-		print("{} - {}".format(job_titles[i],company_names[i]))
+def getJobLinks(soup):
+	job_links = []
+	for outter_div in soup.find_all(name='div', attrs={"class":["row","result"]}):
+		for inner_div in outter_div.find_all(name='div', attrs={"class": "title"}):
+			job_link = inner_div.a.get('href')
+			job_links.append("https://ca.indeed.com"+job_link)
+	return job_links
 
+def getJobSummary(URL):
+	page = requests.get(URL)
+	soup = BeautifulSoup(page.text, 'html.parser')
+	job_summary = soup.find(name='div', attrs={"id":"jobDescriptionText"}).get_text().lower()
+	return job_summary
+
+def main():
+	df = pd.DataFrame(columns=['job_title','company','location','job_summary'])
+
+	for i in range(4):
+		print("working...")
+		URL = 'https://ca.indeed.com/jobs?q=data+scientist&l=toronto&start=' + str(i*10)
+		page = requests.get(URL)
+		soup = BeautifulSoup(page.text, 'html.parser')
+		getJobTitles(soup)
+		getLocations(soup)
+		getCompanyNames(soup)
+		job_links = getJobLinks(soup)
+		global job_summaries
+		for job_link in job_links:
+			job_summaries.append(getJobSummary(job_link))
+
+	df.job_title = job_titles
+	df.company = company_names
+	df.location = locations
+	df.job_summary = job_summaries
+	df.to_csv('./data/jobs.csv')
 	pdb.set_trace()
 
+	# URL = 'https://ca.indeed.com/jobs?q=data%20scientist&l=toronto'
+	# #conducting a request of the stated URL above:
+	# page = requests.get(URL)
+	# #specifying a desired format of “page” using the html parser - this allows python to read the various components of the page, rather than treating it as one long string.
+	# soup = BeautifulSoup(page.text, 'html.parser')
+	# job_titles = getJobTitles(soup)
+	# locations = getLocations(soup)
+	# company_names = getCompanyNames(soup)
+	# job_links = getJobLinks(soup)
+	# job_summaries = []
+	# for job_link in job_links:
+	# 	job_summaries.append(getJobSummary(job_link))
+
+	# df = pd.DataFrame(columns=['job_title','company','location','job_summary'])
+	# df.job_title = job_titles
+	# df.company = company_names
+	# df.location = locations
+	# df.job_summary = job_summaries
+
+	# df.to_csv('./data/jobs.csv')
+
+	# pdb.set_trace()
 
 if __name__ == '__main__':
 	main()
+
+
+
